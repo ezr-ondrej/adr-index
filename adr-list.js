@@ -48,6 +48,15 @@ const humanReadableStatus = (status) => {
   }
 }
 
+const downloadADR = (url, callback) => {
+  var xhr = new XMLHttpRequest();
+  this.adrs = {}
+
+  xhr.open('GET', url, true);
+  xhr.onload = callback;
+  xhr.send(null);
+}
+
 const parseADR = (name, text) => {
   const adr = { name, status: UNKNOWN_STATUS, authors: [] };
   let inStatus = false;
@@ -80,16 +89,15 @@ const parseADR = (name, text) => {
   return adr;
 }
 
+
+
 class ADRList extends HTMLElement {
   constructor() {
     super();
     this._shadowRoot = this.attachShadow({ 'mode': 'open' });
     this.adrs = {};
-    this.branchName = "";
-  }
-
-  get token() {
-    return this.getAttribute('token');
+    this.branchName = "main";
+    this.downloanding = 0;
   }
 
   get namespace() {
@@ -105,76 +113,53 @@ class ADRList extends HTMLElement {
   }
 
   adrLink(key) {
-    return `https://raw.githubusercontent.com/${this.namespace}/${this.repository}/${this.branchName}/${this.adrsPath}/${this.adrs[key].path}`
+    return `https://raw.githubusercontent.com/${this.namespace}/${this.repository}/${this.branchName}/${this.adrsPath}/${this.adrs[key].name}`
   }
 
   connectedCallback() {
+    const style = document.createElement('style');
+    style.innerHTML = STYLES;
+    this.$list = document.createElement('ul');
+    this.$list.classList = "adr-index";
+    this._shadowRoot.appendChild(style);
+    this._shadowRoot.appendChild(this.$list);
+
+
     const component = this;
     var xhr = new XMLHttpRequest();
-    const url = "https://api.github.com/graphql";
+    const url = `https://api.github.com/repos/${this.namespace}/${this.repository}/contents/${this.adrsPath}`;
     this.adrs = {}
 
-    xhr.open('POST', url, true);
-    xhr.setRequestHeader('Authorization', `bearer ${this.token}`)
+    xhr.open('GET', url, true);
     xhr.onload = function () {
         // do something to response
-        const jsonData = JSON.parse(this.response).data;
-        const adrEntries = jsonData.repository.defaultBranchRef.target.file.object.entries;
+        const adrEntries = JSON.parse(this.response);
 
-        component.branchName = jsonData.repository.defaultBranchRef.name;
         adrEntries.forEach((adr, i) => {
           const key = adr.name.split('-')[0];
           // filter out non ADRs and template
           if (!/^\d/.test(key) || key.endsWith('0')) return;
-          component.adrs[key] = parseADR(adr.name, adr.object.text);
+          component.downloanding += 1;
+          downloadADR(adr.download_url, function() {
+            console.log(adr.name);
+            component.adrs[key] = parseADR(adr.name, this.response);
+            component.downloanding -= 1;
+            component.refresh();
+          })
         });
-        component.refresh();
     };
-    xhr.send(JSON.stringify({query: this.graphqlQuery()}));
-  }
-
-  graphqlQuery() {
-    return `
-query {
-  repository(owner: "${this.namespace}", name: "${this.repository}") {
-    defaultBranchRef {
-      name
-      target {
-        ... on Commit {
-          file(path: "${this.adrsPath}") {
-            object {
-              ... on Tree {
-                entries {
-                  name
-                  object {
-                    ... on Blob {
-                      text
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-    `
+    xhr.send(null);
   }
 
   refresh() {
-    const style = document.createElement('style');
-    style.innerHTML = STYLES;
-    const $list = document.createElement('ul');
-    $list.classList = "adr-index"
-    for (const [key, adr] of Object.entries(this.adrs)) {
-      let elem = document.createElement('li');
+    const component = this;
+    this.$list.innerHTML = '';
+    Object.keys(this.adrs).sort().reverse().forEach((key) => {
+      const elem = document.createElement('li');
+      const adr = component.adrs[key];
       elem.innerHTML = `<a href="${this.adrLink(key)}" target="_blank">${adr.title}</a><span class="status ${adr.status}">${humanReadableStatus(adr.status)}</span>`;
-      $list.appendChild(elem);
-    }
-    this._shadowRoot.appendChild(style);
-    this._shadowRoot.appendChild($list);
+      component.$list.appendChild(elem);
+    })
   }
 }
 
