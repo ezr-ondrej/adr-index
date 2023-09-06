@@ -101,15 +101,15 @@ class ADRList extends HTMLElement {
   }
 
   get namespace() {
-    return 'RHEnVision';
+    return this.getAttribute('namespace') || 'RHEnVision';
   }
 
   get repository() {
-    return 'provisioning-backend';
+    return this.getAttribute('repo') || 'provisioning-backend';
   }
 
   get adrsPath() {
-    return 'docs/adr';
+    return this.getAttribute('path') || 'docs/adr';
   }
 
   adrLink(key) {
