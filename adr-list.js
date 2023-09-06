@@ -141,7 +141,6 @@ class ADRList extends HTMLElement {
           if (!/^\d/.test(key) || key.endsWith('0')) return;
           component.downloanding += 1;
           downloadADR(adr.download_url, function() {
-            console.log(adr.name);
             component.adrs[key] = parseADR(adr.name, this.response);
             component.downloanding -= 1;
             component.refresh();
